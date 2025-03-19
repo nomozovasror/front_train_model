@@ -36,7 +36,6 @@ function RootLayout() {
         const json = XLSX.utils.sheet_to_json(worksheet);
 
         const transformedData = {};
-        console.log(json);
         if (json.length > 0) {
           Object.keys(json[0]).forEach((key) => {
             if (key !== "__rowNum__") {
@@ -71,8 +70,6 @@ function RootLayout() {
     };
     reader.readAsArrayBuffer(file);
   };
-
-  console.log(fileData);
 
   return (
     <Container fluid p="0" bg={bgColor}>

@@ -1,5 +1,5 @@
-import { Box, Table, Center, Grid, GridItem, Select, Portal, createListCollection, Button, CloseButton, Dialog } from "@chakra-ui/react";
-import { useState } from "react";
+import { Box, Table, Center, Grid, GridItem, Select, Portal, createListCollection, CloseButton, Dialog } from "@chakra-ui/react";
+import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { toaster } from "../components/ui/toaster";
@@ -11,6 +11,59 @@ export default function FileUploadPage() {
   const [dateTime, setDateTime] = useState([]);
   const [fullData, setFullData] = useState([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedData, setSelectedData] = useState({});
+  const [columnSelections, setColumnSelections] = useState({});
+
+  // Holatlarni localStorage’dan tiklash
+  useEffect(() => {
+    const savedInput = localStorage.getItem("input");
+    const savedOutput = localStorage.getItem("output");
+    const savedDateTime = localStorage.getItem("dateTime");
+    const savedFullData = localStorage.getItem("fullData");
+    const savedSelectedData = localStorage.getItem("selectedData");
+    const savedColumnSelections = localStorage.getItem("columnSelections");
+
+    if (savedInput) setInput(JSON.parse(savedInput));
+    if (savedOutput) setOutput(JSON.parse(savedOutput));
+    if (savedDateTime) setDateTime(JSON.parse(savedDateTime));
+    if (savedFullData) setFullData(JSON.parse(savedFullData));
+    if (savedSelectedData) setSelectedData(JSON.parse(savedSelectedData));
+    if (savedColumnSelections) setColumnSelections(JSON.parse(savedColumnSelections));
+
+    console.log("Restored from localStorage:", {
+      input: savedInput,
+      output: savedOutput,
+      dateTime: savedDateTime,
+      fullData: savedFullData,
+      selectedData: savedSelectedData,
+      columnSelections: savedColumnSelections,
+    });
+  }, []);
+
+  // Holatlarni localStorage’ga saqlash
+  useEffect(() => {
+    localStorage.setItem("input", JSON.stringify(input));
+  }, [input]);
+
+  useEffect(() => {
+    localStorage.setItem("output", JSON.stringify(output));
+  }, [output]);
+
+  useEffect(() => {
+    localStorage.setItem("dateTime", JSON.stringify(dateTime));
+  }, [dateTime]);
+
+  useEffect(() => {
+    localStorage.setItem("fullData", JSON.stringify(fullData));
+  }, [fullData]);
+
+  useEffect(() => {
+    localStorage.setItem("selectedData", JSON.stringify(selectedData));
+  }, [selectedData]);
+
+  useEffect(() => {
+    localStorage.setItem("columnSelections", JSON.stringify(columnSelections));
+  }, [columnSelections]);
 
   if (!fileData) {
     return (
@@ -28,46 +81,80 @@ export default function FileUploadPage() {
     ],
   });
 
-  const roundTo = (value) => {
-    if (value < 100) {
-      return value;
-    }
-
-    const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
-    return Math.ceil(value / magnitude) * magnitude;
-  };
-
   const keys = Object.keys(fileData);
   const maxRows = Math.max(...keys.map((key) => fileData[key].length));
 
   const tableSize = () => {
     const keysLen = keys.length;
-    if (keysLen <= 3) {
-      return "sm";
-    } else if (keysLen > 3 && keysLen <= 6) {
-      return "md";
-    } else {
-      return "lg";
+    if (keysLen <= 3) return "sm";
+    else if (keysLen <= 6) return "md";
+    else return "lg";
+  };
+
+  const resetAllSelections = () => {
+    setInput([]);
+    setOutput([]);
+    setDateTime([]);
+    setFullData([]);
+    setSelectedData({});
+    setColumnSelections({});
+    localStorage.clear(); // Agar barchasini tozalash kerak bo‘lsa
+  };
+
+  const clearColumnSelection = (key) => {
+    setColumnSelections((prev) => {
+      const newSelections = { ...prev };
+      delete newSelections[key];
+      return newSelections;
+    });
+
+    if (columnSelections[key] === "input") {
+      setInput([]);
+      delete selectedData["input"];
+      setFullData((prevData) => prevData.map((item) => ({ ...item, input: null })));
+    } else if (columnSelections[key] === "output") {
+      setOutput([]);
+      delete selectedData["output"];
+      setFullData((prevData) => prevData.map((item) => ({ ...item, output: null })));
+    } else if (columnSelections[key] === "datetime") {
+      setDateTime([]);
+      delete selectedData["datetime"];
+      setFullData((prevData) => prevData.map((item) => ({ ...item, datetime: null })));
     }
   };
+
   const handleSelect = (value, key) => {
+    if (!value || value.length === 0) {
+      clearColumnSelection(key);
+      return;
+    }
+
     switch (value[0]) {
       case "input":
-        console.log("input");
-        setInput(fileData[key]);
+        const numericInput = fileData[key]
+          .map((val) => {
+            if (val === "" || val === undefined || isNaN(val)) return 0;
+            return parseFloat(val);
+          })
+          .filter((val) => !isNaN(val));
+        setInput(numericInput);
+        setColumnSelections((prev) => ({ ...prev, [key]: "input" }));
         setFullData((prevData) => {
           if (prevData.length === 0) {
-            return fileData[key].map((value) => ({ input: value }));
+            return numericInput.map((value) => ({ input: value }));
           } else {
             return prevData.map((item, index) => ({
               ...item,
-              input: fileData[key][index] || null, // Agar index yo‘q bo‘lsa, `null` qo‘shiladi
+              input: numericInput[index] || null,
             }));
           }
         });
+        delete selectedData["input"];
+        setSelectedData({ ...selectedData, input: fileData[key] });
         break;
       case "output":
         setOutput(fileData[key]);
+        setColumnSelections((prev) => ({ ...prev, [key]: "output" }));
         setFullData((prevData) => {
           if (prevData.length === 0) {
             return fileData[key].map((value) => ({ output: value }));
@@ -78,9 +165,12 @@ export default function FileUploadPage() {
             }));
           }
         });
+        delete selectedData["output"];
+        setSelectedData({ ...selectedData, output: fileData[key] });
         break;
       case "datetime":
         setDateTime(fileData[key]);
+        setColumnSelections((prev) => ({ ...prev, [key]: "datetime" }));
         setFullData((prevData) => {
           if (prevData.length === 0) {
             return fileData[key].map((value) => ({ datetime: value }));
@@ -91,17 +181,21 @@ export default function FileUploadPage() {
             }));
           }
         });
+        delete selectedData["datetime"];
+        setSelectedData({ ...selectedData, datetime: fileData[key] });
         break;
       default:
+        clearColumnSelection(key);
         toaster.create({
-          title: "Nimadir xato ketti",
-          type: "error",
+          title: "Tanlov noto‘g‘ri, ushbu ustun tozalandi",
+          type: "info",
           duration: 3000,
         });
     }
   };
 
-  const inputMax = Math.max(...input);
+  const inputMax = input.length > 0 ? Math.max(...input) : 0;
+  const safeInputMax = isNaN(inputMax) ? 0 : inputMax;
 
   return (
     <Grid h="100vh" templateRows="repeat(9, 1fr)" gap={2}>
@@ -113,7 +207,7 @@ export default function FileUploadPage() {
                 <LineChart data={fullData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="datetime" />
-                  <YAxis yAxisId="left" domain={[0, inputMax]} />
+                  <YAxis yAxisId="left" domain={[0, safeInputMax]} />
                   <YAxis yAxisId="right" orientation="right" />
                   <Tooltip />
                   <Line yAxisId="left" type="monotone" dataKey="input" stroke="#8884d8" dot={false} />
@@ -138,7 +232,7 @@ export default function FileUploadPage() {
                       <LineChart data={fullData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="datetime" />
-                        <YAxis yAxisId="left" domain={[0, inputMax]} />
+                        <YAxis yAxisId="left" domain={[0, safeInputMax]} />
                         <YAxis yAxisId="right" orientation="right" />
                         <Tooltip />
                         <Line yAxisId="left" type="monotone" dataKey="input" stroke="#8884d8" dot={false} />
@@ -152,7 +246,7 @@ export default function FileUploadPage() {
           </Dialog.Positioner>
         </Dialog.Root>
       </GridItem>
-      <GridItem rowSpan={5} pb="2" pr="2">
+      <GridItem rowSpan={5} pb="2" pr={2}>
         <Box h="100%" overflow="auto" borderWidth="1px" borderRadius="xl">
           <Table.Root size={tableSize()} showColumnBorder variant="outline">
             <Table.Header>
@@ -161,8 +255,9 @@ export default function FileUploadPage() {
                   <Table.ColumnHeader p="0" key={key}>
                     <Select.Root
                       onValueChange={(e) => handleSelect(e.value, key)}
+                      value={columnSelections[key] ? [columnSelections[key]] : []}
                       width="100%"
-                      size="sm" // Table bilan moslash uchun kichikroq size
+                      size={tableSize()}
                       variant="subtle"
                       collection={selectItems}
                     >
